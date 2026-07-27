@@ -1,0 +1,5 @@
+This prototype loads Google MediaPipe Tasks Vision at runtime.
+MediaPipe is licensed under the Apache License 2.0.
+See the upstream project and package for applicable notices and license terms.
+
+The custom prototype source files in this folder were created for the user.

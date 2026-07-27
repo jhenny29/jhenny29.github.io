@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Movement Assessment Prototype</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Safari proof of concept</p>
+        <h1>Movement Assessment</h1>
+      </div>
+      <span id="systemBadge" class="badge badge-idle">Idle</span>
+    </header>
+
+    <section class="instructions card">
+      <strong>Setup:</strong> Place the phone far enough away to show your shoulders, hips, knees, ankles, and feet. Face sideways for the clearest squat angles, or face forward to compare left and right.
+    </section>
+
+    <section class="camera-card card">
+      <div id="stage" class="stage mirror">
+        <video id="camera" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="emptyState" class="empty-state">
+          <span class="camera-icon">◉</span>
+          <p>Camera is off</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="startButton" class="primary-button">Start assessment</button>
+        <button id="cameraButton" class="secondary-button" disabled>Use rear camera</button>
+        <button id="resetButton" class="secondary-button">Reset reps</button>
+      </div>
+      <p id="statusText" class="status-text">Tap “Start assessment” and allow camera access.</p>
+    </section>
+
+    <section class="diagnostics-grid" aria-label="Live diagnostics">
+      <article class="metric card metric-wide">
+        <span>Tracking quality</span>
+        <strong id="trackingQuality">—</strong>
+        <small id="trackingDetail">Average visibility of hips, knees, and ankles</small>
+      </article>
+
+      <article class="metric card">
+        <span>Left knee</span>
+        <strong id="leftKnee">—</strong>
+        <small>Hip–knee–ankle angle</small>
+      </article>
+
+      <article class="metric card">
+        <span>Right knee</span>
+        <strong id="rightKnee">—</strong>
+        <small>Hip–knee–ankle angle</small>
+      </article>
+
+      <article class="metric card">
+        <span>Knee symmetry</span>
+        <strong id="symmetry">—</strong>
+        <small>Absolute side-to-side difference</small>
+      </article>
+
+      <article class="metric card">
+        <span>Torso lean</span>
+        <strong id="torsoLean">—</strong>
+        <small>Shoulder-to-hip line from vertical</small>
+      </article>
+
+      <article class="metric card">
+        <span>Squat phase</span>
+        <strong id="phase">Waiting</strong>
+        <small id="phaseDetail">Stand tall to calibrate</small>
+      </article>
+
+      <article class="metric card">
+        <span>Repetitions</span>
+        <strong id="repCount">0</strong>
+        <small>Counts a full down-and-up cycle</small>
+      </article>
+
+      <article class="metric card">
+        <span>Inference speed</span>
+        <strong id="fps">—</strong>
+        <small id="latency">— ms per analyzed frame</small>
+      </article>
+
+      <article class="metric card">
+        <span>Body coverage</span>
+        <strong id="coverage">—</strong>
+        <small id="coverageDetail">Key joints must stay visible</small>
+      </article>
+    </section>
+
+    <section class="card notes">
+      <h2>What this trial proves</h2>
+      <p>The diagnostics are measurements derived from camera landmarks. They are not a medical diagnosis. The first goal is to confirm that Safari can track movement consistently enough to support later assessment rules.</p>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
