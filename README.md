@@ -1,35 +1,32 @@
-# Safari MediaPipe Movement Assessment Prototype — v2
+# Safari MediaPipe Squat Assessment Prototype — v3
 
-This static HTTPS website tests live pose tracking on an iPhone in Safari.
+This static HTTPS site runs MediaPipe Pose Landmarker locally in iPhone Safari and records a short three-repetition squat assessment.
 
-## Version 2 changes
+## Version 3 changes
 
-- Fixes the “Camera is off” overlay remaining visible after camera permission.
-- Adds a readiness gate before repetitions can be counted.
-- Requires a complete, centered, properly sized full-body pose.
-- Requires the user to stand tall with planted feet for about 1.2 seconds.
-- Automatically pauses repetition recording when no person is detected, body coverage is lost, framing becomes invalid, or the feet move as if the user is walking.
-- Cancels incomplete repetitions when recording pauses.
-- Uses a four-stage repetition state machine: standing, descending, bottom, ascending.
-- Requires the bottom threshold for multiple analyzed frames and the standing threshold for multiple frames before counting a repetition.
-- Keeps the existing diagnostics: tracking quality, knee angles, symmetry, torso lean, phase, repetition count, FPS, latency, and coverage.
+- Requires only the lower body: both hips, knees, ankles, heels, and feet.
+- No longer requires shoulders or the head to fit in the camera view.
+- Allows the user to stand substantially closer to a front-facing phone.
+- Waits for a stable, tall squat-ready stance before beginning.
+- Shows a short automatic countdown after the stance is accepted.
+- Ignores walking into position because recording has not started yet.
+- Stores the starting foot position and pauses if the user walks away during the test.
+- Stops automatically and freezes results after exactly three valid repetitions.
+- Replaces torso lean with stance width because shoulders are no longer required.
 
-## How the readiness gate works
+## Solo testing flow
 
-The camera and MediaPipe remain active so the site can tell when the user returns, but **repetition recording is off** until all conditions are met:
-
-1. Required shoulders, hips, knees, ankles, heels, and feet are visible.
-2. Landmark visibility is high enough.
-3. The whole body is inside the image.
-4. The person is centered and not too close or too far away.
-5. Both knees indicate a tall standing position.
-6. The feet remain stable for approximately 1.2 seconds.
-
-After arming, moving the feet, leaving the frame, or losing reliable tracking pauses the counter. To resume, return to a tall, stable ready stance.
+1. Tap **Start assessment** while near the phone.
+2. Walk into position.
+3. Make sure the image shows your waist/hips, knees, ankles, and both feet.
+4. Stand tall in your normal squat stance and hold still.
+5. Wait for the short countdown.
+6. Perform three controlled squats.
+7. The test stops automatically at 3/3 and freezes the diagnostics.
 
 ## GitHub Pages update
 
-Upload and replace these files in the repository root:
+Replace these files in the repository root:
 
 - `index.html`
 - `styles.css`
@@ -37,18 +34,19 @@ Upload and replace these files in the repository root:
 - `README.md`
 - `LICENSE-NOTICE.txt`
 
-After committing the changes, refresh the GitHub Pages site. On iPhone Safari, close the old tab or use a private tab if Safari temporarily serves a cached copy.
+Commit the changes and reopen the GitHub Pages site. Safari may cache the older JavaScript, so close the old tab or use a private tab for the first v3 test.
 
 ## Prototype thresholds
 
-- Standing angle: 155°
-- Descent starts below: 145°
-- Bottom reached at: 120°
-- Ready hold: 1.2 seconds
-- Pose-loss grace period: 450 milliseconds
+- Standing knee angle: 155°
+- Descent begins below: 145°
+- Bottom recognized at: 120°
+- Ready stance hold: 0.9 seconds
+- Countdown: 2 seconds
+- Target: 3 valid repetitions
 
-These are engineering prototype values and are not validated clinical standards.
+These are engineering prototype settings and are not validated clinical standards.
 
 ## Privacy
 
-Video frames are processed locally in the browser. This prototype does not upload or save video. MediaPipe JavaScript/WASM and the pose model are downloaded from public hosting when the page loads.
+Video is processed locally in the browser. The prototype does not upload or save camera footage. MediaPipe JavaScript/WASM and the pose model are downloaded from public hosting when the page loads.

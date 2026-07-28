@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1020" />
-  <title>Movement Assessment Prototype</title>
+  <title>Three-Rep Squat Assessment</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,13 +12,13 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Safari proof of concept</p>
-        <h1>Movement Assessment</h1>
+        <h1>Three-Rep Squat Assessment</h1>
       </div>
       <span id="systemBadge" class="badge badge-idle">Idle</span>
     </header>
 
     <section class="instructions card">
-      <strong>Setup:</strong> Place the phone far enough away to show your shoulders, hips, knees, ankles, and feet. Face sideways for the clearest squat angles, or face forward to compare left and right.
+      <strong>Setup:</strong> Position the phone so the camera can see from your hips or waist down through both feet. Stand in your normal squat stance. The assessment begins automatically after you hold still, then stops after three valid repetitions.
     </section>
 
     <section class="camera-card card">
@@ -31,7 +31,7 @@
         </div>
         <div id="trackingGate" class="tracking-gate" hidden>
           <strong id="gateTitle">Step into frame</strong>
-          <span id="gateDetail">Stand tall and hold still to arm the counter.</span>
+          <span id="gateDetail">Show hips through feet and hold your squat-ready stance.</span>
         </div>
       </div>
 
@@ -47,7 +47,7 @@
       <article class="metric card metric-wide">
         <span>Tracking quality</span>
         <strong id="trackingQuality">—</strong>
-        <small id="trackingDetail">Average visibility of hips, knees, and ankles</small>
+        <small id="trackingDetail">Average visibility of hips, knees, ankles, heels, and feet</small>
       </article>
 
       <article class="metric card">
@@ -69,9 +69,9 @@
       </article>
 
       <article class="metric card">
-        <span>Torso lean</span>
-        <strong id="torsoLean">—</strong>
-        <small>Shoulder-to-hip line from vertical</small>
+        <span>Stance width</span>
+        <strong id="stanceWidth">—</strong>
+        <small>Ankle spacing relative to hip width</small>
       </article>
 
       <article class="metric card">
@@ -83,7 +83,7 @@
       <article class="metric card">
         <span>Repetitions</span>
         <strong id="repCount">0</strong>
-        <small>Counts a full down-and-up cycle</small>
+        <small>Automatically completes at 3 of 3</small>
       </article>
 
       <article class="metric card">
@@ -95,16 +95,16 @@
       <article class="metric card">
         <span>Body coverage</span>
         <strong id="coverage">—</strong>
-        <small id="coverageDetail">Key joints must stay visible</small>
+        <small id="coverageDetail">Only hips through feet are required</small>
       </article>
     </section>
 
     <section class="card notes">
       <h2>What this trial proves</h2>
-      <p>The diagnostics are measurements derived from camera landmarks. They are not a medical diagnosis. Repetition counting only arms after a complete, centered body holds a stable standing squat stance. It automatically pauses when the person leaves the frame or the feet begin moving around.</p>
+      <p>The diagnostics are measurements derived from camera landmarks. They are not a medical diagnosis. Recording begins only after the lower body is centered and a stable squat-ready stance is held. Walking into position is ignored, and the camera session stops automatically after three valid repetitions.</p>
     </section>
   </main>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@ const ui = {
   leftKnee: document.querySelector("#leftKnee"),
   rightKnee: document.querySelector("#rightKnee"),
   symmetry: document.querySelector("#symmetry"),
-  torsoLean: document.querySelector("#torsoLean"),
+  stanceWidth: document.querySelector("#stanceWidth"),
   phase: document.querySelector("#phase"),
   phaseDetail: document.querySelector("#phaseDetail"),
   repCount: document.querySelector("#repCount"),
@@ -52,13 +52,13 @@ const LANDMARK = {
 };
 
 const CONNECTIONS = [
-  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-  [11, 23], [12, 24], [23, 24],
+  [23, 24],
   [23, 25], [25, 27], [27, 29], [29, 31], [27, 31],
   [24, 26], [26, 28], [28, 30], [30, 32], [28, 32],
 ];
 
-const KEY_JOINTS = [11, 12, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+// Only the lower body is required. The user can stand much closer to the phone.
+const KEY_JOINTS = [23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 
 let poseLandmarker = null;
 let mediaStream = null;
@@ -78,8 +78,10 @@ let movementTrend = 0;
 let previousAnkleMidpoint = null;
 let previousFootSpan = null;
 let positionMotion = 0;
+let readyAnkleMidpoint = null;
+let readyFootSpan = null;
 
-let assessmentMode = "waiting"; // waiting, calibrating, active, paused
+let assessmentMode = "waiting"; // waiting, calibrating, countdown, active, paused, completed
 let readyStartedAt = null;
 let lastTrackablePoseAt = 0;
 let repCount = 0;
@@ -92,7 +94,9 @@ let standingFrames = 0;
 const PROCESS_INTERVAL_MS = 70;
 const VISIBILITY_REQUIRED = 0.55;
 const ARM_VISIBILITY_REQUIRED = 0.68;
-const READY_HOLD_MS = 1200;
+const READY_HOLD_MS = 900;
+const START_COUNTDOWN_MS = 2000;
+const TARGET_REPS = 3;
 const LOST_POSE_GRACE_MS = 450;
 const STANDING_ANGLE = 155;
 const DESCENT_START_ANGLE = 145;
@@ -101,6 +105,8 @@ const MIN_REP_MS = 650;
 const MAX_REP_MS = 8000;
 const MAX_READY_FOOT_MOTION = 0.012;
 const MAX_ACTIVE_FOOT_MOTION = 0.032;
+const MAX_ACTIVE_POSITION_DRIFT = 0.075;
+const MAX_ACTIVE_STANCE_CHANGE = 0.22;
 
 startButton.addEventListener("click", async () => {
   if (running) {
@@ -140,9 +146,9 @@ async function startAssessment() {
     cameraButton.disabled = false;
     emptyState.hidden = true;
     trackingGate.hidden = false;
-    setGate("Step into frame", "Stand tall in your squat stance and hold still.", "waiting");
+    setGate("Show hips to feet", "Stand tall in your squat stance and hold still.", "waiting");
     setBadge("Positioning", "loading");
-    statusText.textContent = "The counter will arm after a complete, stable standing pose.";
+    statusText.textContent = "The test starts automatically when your hips, knees, ankles, and feet are visible and stable.";
     predictLoop();
   } catch (error) {
     console.error(error);
@@ -217,7 +223,7 @@ async function restartCamera() {
   await startCamera();
   resetTrackingState(false);
   trackingGate.hidden = false;
-  setGate("Step into frame", "Stand tall and hold still to resume.", "waiting");
+  setGate("Show hips to feet", "Stand tall in your squat stance and hold still to resume.", "waiting");
   running = true;
   predictLoop();
 }
@@ -311,9 +317,9 @@ function handleResult(result, inferenceMs, now) {
   }
   previousAverageKnee = averageKnee;
 
-  const shoulderMidpoint = midpoint(landmarks[LANDMARK.leftShoulder], landmarks[LANDMARK.rightShoulder]);
   const hipMidpoint = midpoint(landmarks[LANDMARK.leftHip], landmarks[LANDMARK.rightHip]);
   const ankleMidpoint = midpoint(landmarks[LANDMARK.leftAnkle], landmarks[LANDMARK.rightAnkle]);
+  const hipSpan = distance2D(landmarks[LANDMARK.leftHip], landmarks[LANDMARK.rightHip]);
   const footSpan = distance2D(landmarks[LANDMARK.leftAnkle], landmarks[LANDMARK.rightAnkle]);
 
   const rawPositionMotion = previousAnkleMidpoint
@@ -323,7 +329,7 @@ function handleResult(result, inferenceMs, now) {
   previousAnkleMidpoint = ankleMidpoint;
   previousFootSpan = footSpan;
 
-  const torsoLean = angleFromVertical(shoulderMidpoint, hipMidpoint);
+  const stanceWidthRatio = hipSpan > 0.001 ? footSpan / hipSpan : 0;
   const symmetry = Math.abs(smoothedLeftKnee - smoothedRightKnee);
   const frame = evaluateFraming(landmarks, hipMidpoint);
 
@@ -337,18 +343,27 @@ function handleResult(result, inferenceMs, now) {
 
   if (assessmentMode === "active") {
     const feetStableEnough = positionMotion <= MAX_ACTIVE_FOOT_MOTION;
-    const activeTrackable = baseTrackable && feetStableEnough;
+    const positionDrift = readyAnkleMidpoint ? distance2D(ankleMidpoint, readyAnkleMidpoint) : 0;
+    const stanceChange = readyFootSpan && readyFootSpan > 0.001
+      ? Math.abs(footSpan - readyFootSpan) / readyFootSpan
+      : 0;
+    const stillInStartingSpot = positionDrift <= MAX_ACTIVE_POSITION_DRIFT
+      && stanceChange <= MAX_ACTIVE_STANCE_CHANGE;
+    const activeTrackable = baseTrackable && feetStableEnough && stillInStartingSpot;
 
     if (activeTrackable) {
       lastTrackablePoseAt = now;
       phaseResult = updateSquatCounter(averageKnee, movementTrend, now);
-      setBadge("Recording", "active");
-      setGate("Assessment active", "Keep your feet planted. Leave the frame to pause.", "active");
+      if (assessmentMode === "active") {
+        setBadge(`Recording ${repCount}/${TARGET_REPS}`, "active");
+        setGate("Assessment active", `Complete ${TARGET_REPS - repCount} more repetition${TARGET_REPS - repCount === 1 ? "" : "s"}.`, "active");
+      }
     } else if (now - lastTrackablePoseAt > LOST_POSE_GRACE_MS) {
-      pauseAssessment(positionMotion > MAX_ACTIVE_FOOT_MOTION
-        ? "Foot movement detected"
-        : readinessReason({ hasCoverage, averageVisibility, frame, standing: true, stable: true }));
-      phaseResult = { phase: "Paused", detail: "Stand tall and hold still to resume" };
+      let reason = readinessReason({ hasCoverage, averageVisibility, frame, standing: true, stable: true });
+      if (!feetStableEnough) reason = "Foot movement detected";
+      if (!stillInStartingSpot) reason = "You moved away from the starting stance";
+      pauseAssessment(reason);
+      phaseResult = { phase: "Paused", detail: "Return to your squat-ready stance to resume" };
     } else {
       phaseResult = { phase: "Tracking", detail: "Brief tracking interruption" };
     }
@@ -361,6 +376,8 @@ function handleResult(result, inferenceMs, now) {
       frame,
       averageKnee,
       positionMotion,
+      ankleMidpoint,
+      footSpan,
     });
   }
 
@@ -375,7 +392,7 @@ function handleResult(result, inferenceMs, now) {
   ui.leftKnee.textContent = formatDegrees(smoothedLeftKnee);
   ui.rightKnee.textContent = formatDegrees(smoothedRightKnee);
   ui.symmetry.textContent = formatDegrees(symmetry);
-  ui.torsoLean.textContent = formatDegrees(torsoLean);
+  ui.stanceWidth.textContent = stanceWidthRatio > 0 ? `${stanceWidthRatio.toFixed(2)}×` : "—";
   ui.phase.textContent = phaseResult.phase;
   ui.phaseDetail.textContent = phaseResult.detail;
   ui.repCount.textContent = String(repCount);
@@ -383,34 +400,55 @@ function handleResult(result, inferenceMs, now) {
   ui.latency.textContent = `${inferenceMs.toFixed(0)} ms per analyzed frame`;
   ui.coverage.textContent = baseTrackable ? "Ready" : hasCoverage ? "Adjust" : "Partial";
   ui.coverageDetail.textContent = baseTrackable
-    ? "Full body is centered and correctly sized"
+    ? "Hips through feet are centered and measurable"
     : coverageMessage({ missing, frame, averageVisibility });
 }
 
-function updateReadiness({ now, baseTrackable, hasCoverage, averageVisibility, frame, averageKnee, positionMotion }) {
+function updateReadiness({
+  now,
+  baseTrackable,
+  hasCoverage,
+  averageVisibility,
+  frame,
+  averageKnee,
+  positionMotion,
+  ankleMidpoint,
+  footSpan,
+}) {
   const standing = averageKnee >= STANDING_ANGLE;
   const stable = positionMotion <= MAX_READY_FOOT_MOTION && Math.abs(movementTrend) < 0.9;
 
   if (baseTrackable && standing && stable) {
     if (readyStartedAt === null) readyStartedAt = now;
-    assessmentMode = "calibrating";
     const elapsed = now - readyStartedAt;
-    const remaining = Math.max(0, READY_HOLD_MS - elapsed);
 
-    if (elapsed >= READY_HOLD_MS) {
-      assessmentMode = "active";
-      lastTrackablePoseAt = now;
-      resetPartialRep();
-      setBadge("Recording", "active");
-      setGate("Assessment active", "Begin squatting. Keep your feet planted.", "active");
-      statusText.textContent = "Repetition recording is active and will pause if you leave position.";
-      return { phase: "Standing", detail: "Counter armed—begin the first repetition" };
+    if (elapsed < READY_HOLD_MS) {
+      assessmentMode = "calibrating";
+      const remaining = Math.max(0, READY_HOLD_MS - elapsed);
+      const seconds = Math.max(1, Math.ceil(remaining / 1000));
+      setBadge("Ready stance", "loading");
+      setGate("Hold squat-ready position", `Checking stability… ${seconds}`, "calibrating");
+      return { phase: "Getting ready", detail: "Keep hips, knees, ankles, and feet visible" };
     }
 
-    const seconds = Math.max(1, Math.ceil(remaining / 1000));
-    setBadge("Hold still", "loading");
-    setGate("Hold your ready stance", `Arming in ${seconds}…`, "calibrating");
-    return { phase: "Calibrating", detail: `Hold still for ${seconds} more second${seconds === 1 ? "" : "s"}` };
+    if (elapsed < READY_HOLD_MS + START_COUNTDOWN_MS) {
+      assessmentMode = "countdown";
+      const countdownRemaining = READY_HOLD_MS + START_COUNTDOWN_MS - elapsed;
+      const count = Math.max(1, Math.ceil(countdownRemaining / 1000));
+      setBadge(`Starting in ${count}`, "loading");
+      setGate(`Starting in ${count}`, "Stay tall with your feet planted.", "calibrating");
+      return { phase: "Ready", detail: `Assessment begins in ${count}` };
+    }
+
+    assessmentMode = "active";
+    lastTrackablePoseAt = now;
+    readyAnkleMidpoint = { ...ankleMidpoint };
+    readyFootSpan = footSpan;
+    resetPartialRep();
+    setBadge(`Recording 0/${TARGET_REPS}`, "active");
+    setGate("Assessment active", `Complete ${TARGET_REPS} controlled squats.`, "active");
+    statusText.textContent = `Recording started automatically. The test stops after ${TARGET_REPS} valid repetitions.`;
+    return { phase: "Standing", detail: "Begin your first repetition" };
   }
 
   readyStartedAt = null;
@@ -418,7 +456,7 @@ function updateReadiness({ now, baseTrackable, hasCoverage, averageVisibility, f
   const reason = readinessReason({ hasCoverage, averageVisibility, frame, standing, stable });
   setBadge(assessmentMode === "paused" ? "Paused" : "Positioning", "loading");
   setGate(assessmentMode === "paused" ? "Recording paused" : "Not ready yet", reason, "waiting");
-  statusText.textContent = "Recording is off until the ready stance is stable.";
+  statusText.textContent = "Recording stays off until a stable squat-ready stance is detected.";
   return { phase: assessmentMode === "paused" ? "Paused" : "Get ready", detail: reason };
 }
 
@@ -478,7 +516,11 @@ function updateSquatCounter(kneeAngle, trend, now) {
       if (standingFrames >= 2 && duration >= MIN_REP_MS) {
         repCount += 1;
         resetPartialRep();
-        return { phase: "Rep complete", detail: `Completed repetition ${repCount}` };
+        if (repCount >= TARGET_REPS) {
+          completeAssessment();
+          return { phase: "Complete", detail: `${TARGET_REPS} of ${TARGET_REPS} repetitions recorded` };
+        }
+        return { phase: "Rep complete", detail: `Completed repetition ${repCount} of ${TARGET_REPS}` };
       }
     } else {
       standingFrames = 0;
@@ -495,6 +537,21 @@ function updateSquatCounter(kneeAngle, trend, now) {
 
   resetPartialRep();
   return { phase: "Standing", detail: "Counter armed" };
+}
+
+function completeAssessment() {
+  assessmentMode = "completed";
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  animationId = null;
+  stopTracksOnly();
+  video.pause();
+  startButton.disabled = false;
+  startButton.textContent = "Start new assessment";
+  cameraButton.disabled = true;
+  setBadge("Complete", "active");
+  setGate("Assessment complete", `${TARGET_REPS} valid repetitions recorded. Results are now frozen.`, "active");
+  statusText.textContent = "Assessment stopped automatically after three repetitions. Tap Start new assessment to run it again.";
 }
 
 function handleUntrackablePose(now, reason) {
@@ -525,27 +582,27 @@ function evaluateFraming(landmarks, hipMidpoint) {
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
-  const bodyHeight = maxY - minY;
+  const lowerBodyHeight = maxY - minY;
 
   return {
-    inFrame: minX >= 0.015 && maxX <= 0.985 && minY >= 0.015 && maxY <= 0.985,
-    centered: hipMidpoint.x >= 0.22 && hipMidpoint.x <= 0.78,
-    bodySizeOk: bodyHeight >= 0.42 && bodyHeight <= 0.93,
-    bodyHeight,
+    inFrame: minX >= 0.01 && maxX <= 0.99 && minY >= 0.01 && maxY <= 0.99,
+    centered: hipMidpoint.x >= 0.16 && hipMidpoint.x <= 0.84,
+    bodySizeOk: lowerBodyHeight >= 0.30 && lowerBodyHeight <= 0.96,
+    bodyHeight: lowerBodyHeight,
   };
 }
 
 function readinessReason({ hasCoverage, averageVisibility, frame, standing, stable }) {
-  if (!hasCoverage) return "Show both shoulders, hips, knees, ankles, and feet";
+  if (!hasCoverage) return "Show both hips, knees, ankles, heels, and feet";
   if (averageVisibility < ARM_VISIBILITY_REQUIRED) return "Improve lighting or reduce joint obstruction";
-  if (!frame.inFrame) return "Move back until your entire body is inside the frame";
-  if (!frame.bodySizeOk) return frame.bodyHeight < 0.42
-    ? "Move closer so your body is large enough to measure"
-    : "Move farther away so your full body fits";
+  if (!frame.inFrame) return "Adjust the phone or your position until hips through feet fit";
+  if (!frame.bodySizeOk) return frame.bodyHeight < 0.30
+    ? "Move slightly closer so the lower body is large enough to measure"
+    : "Move slightly farther away so hips through feet fit";
   if (!frame.centered) return "Move toward the center of the camera view";
-  if (!standing) return "Stand tall in your normal squat stance";
+  if (!standing) return "Stand tall in your squat-ready stance";
   if (!stable) return "Plant your feet and hold still";
-  return "Hold your ready stance";
+  return "Hold your squat-ready stance";
 }
 
 function coverageMessage({ missing, frame, averageVisibility }) {
@@ -559,22 +616,22 @@ function coverageMessage({ missing, frame, averageVisibility }) {
 
 function showNoPose(inferenceMs) {
   ui.trackingQuality.textContent = "0%";
-  ui.trackingDetail.textContent = "No full-body pose detected";
+  ui.trackingDetail.textContent = "No lower-body pose detected";
   ui.leftKnee.textContent = "—";
   ui.rightKnee.textContent = "—";
   ui.symmetry.textContent = "—";
-  ui.torsoLean.textContent = "—";
+  ui.stanceWidth.textContent = "—";
   ui.phase.textContent = assessmentMode === "paused" ? "Paused" : "Reposition";
   ui.phaseDetail.textContent = assessmentMode === "paused"
     ? "Stand tall and hold still to resume"
-    : "Move into view and show your full body";
+    : "Move into view and show your hips through both feet";
   ui.fps.textContent = `${displayedFps.toFixed(1)} FPS`;
   ui.latency.textContent = `${inferenceMs.toFixed(0)} ms per analyzed frame`;
   ui.coverage.textContent = "None";
-  ui.coverageDetail.textContent = "No pose landmarks available";
+  ui.coverageDetail.textContent = "No usable lower-body landmarks available";
   setGate(
     assessmentMode === "paused" ? "Recording paused" : "Step into frame",
-    "Stand tall with your full body visible to arm the counter.",
+    "Stand tall with hips, knees, ankles, and feet visible.",
     "waiting",
   );
 }
@@ -630,11 +687,6 @@ function angleDegrees(a, b, c) {
   return Math.acos(cosine) * 180 / Math.PI;
 }
 
-function angleFromVertical(top, bottom) {
-  const dx = top.x - bottom.x;
-  const dy = top.y - bottom.y;
-  return Math.abs(Math.atan2(dx, -dy) * 180 / Math.PI);
-}
 
 function midpoint(a, b) {
   return {
@@ -683,6 +735,8 @@ function resetTrackingState(resetReps) {
   assessmentMode = "waiting";
   readyStartedAt = null;
   lastTrackablePoseAt = 0;
+  readyAnkleMidpoint = null;
+  readyFootSpan = null;
   smoothedLeftKnee = null;
   smoothedRightKnee = null;
   previousAverageKnee = null;
@@ -699,11 +753,11 @@ function resetCounter() {
   resetTrackingState(false);
   ui.repCount.textContent = "0";
   ui.phase.textContent = "Waiting";
-  ui.phaseDetail.textContent = "Stand tall and hold still to arm tracking";
+  ui.phaseDetail.textContent = "Show hips through feet and hold a squat-ready stance";
   if (running) {
     trackingGate.hidden = false;
     setBadge("Positioning", "loading");
-    setGate("Counter reset", "Stand tall and hold still to arm it again.", "waiting");
+    setGate("Counter reset", "Show hips through feet and hold your squat-ready stance.", "waiting");
     statusText.textContent = "Recording is off until the ready stance is stable.";
   }
 }
