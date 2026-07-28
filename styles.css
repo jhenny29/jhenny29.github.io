@@ -178,3 +178,52 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .diagnostics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .metric-wide { grid-column: span 3; }
 }
+
+/* The explicit hidden selector prevents component display rules from overriding
+   the HTML hidden attribute on Safari and other browsers. */
+.empty-state[hidden],
+.tracking-gate[hidden] {
+  display: none !important;
+}
+
+.tracking-gate {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 3;
+  width: min(calc(100% - 28px), 430px);
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-align: center;
+  background: rgba(7, 11, 22, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.tracking-gate strong,
+.tracking-gate span {
+  display: block;
+}
+
+.tracking-gate strong {
+  margin-bottom: 3px;
+  font-size: 0.98rem;
+}
+
+.tracking-gate span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.tracking-gate[data-type="active"] {
+  border-color: rgba(79, 224, 164, 0.42);
+  background: rgba(7, 35, 27, 0.82);
+}
+
+.tracking-gate[data-type="calibrating"] {
+  border-color: rgba(255, 209, 102, 0.42);
+}
